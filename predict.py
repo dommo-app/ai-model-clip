@@ -7,11 +7,15 @@ from cog import BaseModel, BasePredictor, File, Input
 from PIL import Image
 from transformers import AutoProcessor, AutoTokenizer, CLIPModel
 
+import torch
+
 # os.environ["TRANSFORMERS_VERBOSITY"] = "info"
 
 
 MODEL_NAME = "openai/clip-vit-large-patch14"
 CACHE_DIR = ".transformer"
+
+device = "cuda:0" if torch.cuda.is_available() else "cpu"
 
 
 class Output(BaseModel):
@@ -23,6 +27,8 @@ class Predictor(BasePredictor):
         """Load the model into memory to make running multiple predictions efficient"""
 
         self.model: CLIPModel = CLIPModel.from_pretrained(MODEL_NAME, cache_dir=CACHE_DIR)  # type: ignore
+        self.model = self.model.to(device)
+
         self.processor = AutoProcessor.from_pretrained(MODEL_NAME, cache_dir=CACHE_DIR)
         self.tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, cache_dir=CACHE_DIR)
 
@@ -36,11 +42,13 @@ class Predictor(BasePredictor):
         if image:
             image = Image.open(image)
 
-            inputs = self.processor(images=image, return_tensors="pt")
+            inputs = self.processor(images=image, return_tensors="pt").to(device)
             image_features = self.model.get_image_features(**inputs)
             embedding = image_features.tolist()[0]
         elif text:
-            inputs = self.tokenizer([text], padding=True, return_tensors="pt")
+            inputs = self.tokenizer([text], padding=True, return_tensors="pt").to(
+                device
+            )
             text_features = self.model.get_text_features(**inputs)  # type: ignore
             embedding = text_features.tolist()[0]
         else:
